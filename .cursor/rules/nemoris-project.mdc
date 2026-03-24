@@ -1,0 +1,49 @@
+---
+description: Nemoris project goals, constraints, and conventions (Memorae clone MVP)
+alwaysApply: true
+---
+
+# Nemoris Project Rules
+
+## Goal
+
+Build a Memorae-style MVP: **functionality first**. Core features are reminders, lists, and WhatsApp integration. No web dashboard or fancy features at this stage.
+
+## Constraints
+
+- **No web UI** for now — backend API and WhatsApp only
+- **No fancy features** — focus on core functionality
+- **Branding**: Always use "Nemoris" (never Memorae or other names in user-facing copy)
+
+## Tech Stack
+
+- **Runtime**: Node.js (>=20), ES modules
+- **Framework**: Express
+- **Database**: PostgreSQL (migrate from SQLite; use Prisma)
+- **Integrations**: WhatsApp (WAHA), OpenAI, ChromaDB
+- **Code style**: Keep current patterns — ES modules, `import`/`export`, no TypeScript
+
+## Architecture
+
+- `apps/backend/` — nemoris_backend (Express, Prisma, Chroma, WAHA client)
+- `apps/backend/src/index.js` — Express app entry
+- `apps/backend/src/routes/` — webhook, API routes
+- `apps/backend/src/handlers/` — message handling
+- `apps/backend/src/services/` — business logic (memory, reminder, parser, openai)
+- `apps/backend/src/config/` — database, chroma, waha
+- `apps/llm-service/` — nemoris_llm_service (OpenCode proxy)
+
+## Conventions
+
+- Use `logger` from `./utils/logger.js` for logging
+- Use Prisma for all database access (after migration from SQLite)
+- Keep handlers thin; put logic in services
+- Use `crypto.randomUUID()` for IDs
+- Support EN and ID languages in parser/templates
+
+## MVP Scope
+
+1. **Reminders** — create, schedule, recurring, cron delivery
+2. **Lists** — create and manage lists (new feature)
+3. **Memory** — store/retrieve with ChromaDB embeddings
+4. **WhatsApp** — receive/send via webhook

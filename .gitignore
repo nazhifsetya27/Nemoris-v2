@@ -1,0 +1,64 @@
+# Dependencies
+node_modules/
+
+# Environment & secrets (templates like .env.example stay tracked)
+/.env
+/.env.*
+!/.env.example
+!/.env.*.example
+
+apps/**/.env
+apps/**/.env.*
+!apps/**/.env.example
+
+# Local-only Docker env overrides (compose may use docker/.env)
+docker/.env
+
+# Logs & debug
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Runtime / local data
+tmp/
+temp/
+*.pid
+*.seed
+*.pid.lock
+
+# Test & coverage
+coverage/
+.nyc_output/
+*.lcov
+
+# Build / caches (if added later)
+dist/
+build/
+.cache/
+.parcel-cache/
+.turbo/
+
+# Prisma (client is under node_modules; keep prisma/schema and migrations tracked)
+apps/backend/prisma/*.db
+apps/backend/prisma/*.db-journal
+
+# OS
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Editors (personal / machine-specific)
+.idea/
+*.iml
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*~

@@ -1,0 +1,4 @@
+# Nemoris - use docker/docker-compose.yml with profiles
+# Example: docker compose -f docker/docker-compose.yml --profile all up -d
+include:
+  - docker/docker-compose.yml

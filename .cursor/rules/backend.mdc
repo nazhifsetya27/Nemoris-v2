@@ -1,0 +1,40 @@
+---
+description: Backend conventions for Nemoris API, services, and database
+globs: apps/backend/src/**/*.js
+alwaysApply: false
+---
+
+# Backend Rules
+
+## Database
+
+- Use **Prisma** with PostgreSQL (not SQLite, not raw `better-sqlite3`)
+- Run migrations with `npx prisma migrate dev`
+- Use `@prisma/client` for queries; avoid raw SQL unless necessary
+
+## API Design
+
+- REST-style: `GET` read, `POST` create, `DELETE` remove
+- User lookup by `chatId` (WhatsApp identifier)
+- Return JSON with `{ error: string }` on failure
+- Use `logger.error()` in catch blocks
+
+## Services
+
+- One concern per service file
+- Export async functions; use `try/catch` at call site or in route
+- Pass `userId` or `chatId` explicitly; resolve user in route/handler
+
+## Example Pattern
+
+```javascript
+// Route: resolve user, call service
+const user = await prisma.user.findUnique({ where: { chatId } });
+if (!user) return res.status(404).json({ error: 'User not found' });
+const result = await someService(user.id, data);
+
+// Service: pure business logic
+export async function someService(userId, data) {
+  return prisma.thing.create({ data: { userId, ...data } });
+}
+```

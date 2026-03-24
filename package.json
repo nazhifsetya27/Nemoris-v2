@@ -1,0 +1,20 @@
+{
+  "name": "nemoris",
+  "version": "1.0.0",
+  "description": "Personal AI Memory Assistant for WhatsApp",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "cd apps/backend && npm start",
+    "dev": "cd apps/backend && npm run dev",
+    "dev:backend": "cd apps/backend && npm run dev",
+    "dev:llm": "cd apps/llm-service && npm start",
+    "proxy": "cd apps/llm-service && npm start",
+    "db:migrate": "cd apps/backend && npm run db:migrate",
+    "db:generate": "cd apps/backend && npm run db:generate",
+    "db:push": "cd apps/backend && npm run db:push"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

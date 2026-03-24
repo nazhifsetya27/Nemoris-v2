@@ -1,0 +1,103 @@
+version: "3.8"
+
+services:
+  nemoris_db:
+    profiles: ["db", "all"]
+    image: postgres:15-alpine
+    container_name: nemoris_db
+    ports:
+      - "5442:5432"
+    environment:
+      POSTGRES_USER: nemoris
+      POSTGRES_PASSWORD: nemoris123
+      POSTGRES_DB: nemoris
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nemoris -d nemoris"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  nemoris_chroma:
+    profiles: ["chroma", "all"]
+    image: chromadb/chroma:latest
+    container_name: nemoris_chroma
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      IS_PERSISTENT: "TRUE"
+      ANONYMIZED_TELEMETRY: "FALSE"
+    restart: unless-stopped
+
+  nemoris_waha:
+    profiles: ["waha", "all"]
+    image: devlikeapro/waha:latest
+    container_name: nemoris_waha
+    ports:
+      - "3002:3000"
+      - "3003:3002"
+    volumes:
+      - waha_sessions:/app/.sessions
+    environment:
+      WAHA_LOCAL_STORE_BASE_DIR: /app/.sessions
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  nemoris_llm_service:
+    profiles: ["llm"]
+    build:
+      context: ../apps/llm-service
+      dockerfile: Dockerfile
+    container_name: nemoris_llm_service
+    ports:
+      - "4096:4096"
+    environment:
+      PORT: 4096
+      OPENAI_MODEL: ${OPENAI_MODEL:-google/gemini-2.5-flash}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    # Note: Requires opencode CLI in image for full containerization.
+    # For host-based LLM, run: npm run proxy
+
+  nemoris_backend:
+    profiles: ["backend", "all"]
+    build:
+      context: ../apps/backend
+      dockerfile: Dockerfile
+    container_name: nemoris_backend
+    ports:
+      - "3001:3001"
+    env_file:
+      - ../.env
+    environment:
+      DATABASE_URL: postgresql://nemoris:nemoris123@nemoris_db:5432/nemoris
+      CHROMA_URL: http://nemoris_chroma:8000
+      WAHA_URL: http://nemoris_waha:3000
+      LLM_PROVIDER: opencode
+      LLM_URL: ${LLM_URL:-http://host.docker.internal:4096}
+      OPENAI_MODEL: ${OPENAI_MODEL:-google/gemini-2.5-flash}
+    depends_on:
+      nemoris_db:
+        condition: service_healthy
+      nemoris_chroma:
+        condition: service_started
+      nemoris_waha:
+        condition: service_started
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  chroma_data:
+  waha_sessions:
+
+networks:
+  default:
+    name: nemoris-network
