@@ -1,12 +1,10 @@
-version: "3.8"
-
 services:
   nemoris_db:
-    profiles: ["db", "all"]
+    profiles: ['db', 'all']
     image: postgres:15-alpine
     container_name: nemoris_db
     ports:
-      - "5442:5432"
+      - '5442:5432'
     environment:
       POSTGRES_USER: nemoris
       POSTGRES_PASSWORD: nemoris123
@@ -14,65 +12,110 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U nemoris -d nemoris"]
+      test: ['CMD-SHELL', 'pg_isready -U nemoris -d nemoris']
       interval: 5s
       timeout: 5s
       retries: 5
     restart: unless-stopped
 
   nemoris_chroma:
-    profiles: ["chroma", "all"]
-    image: chromadb/chroma:latest
+    profiles: ['chroma', 'all']
+    # Pin server version: `latest` is often a dev build and can break older clients (e.g. chromadb-admin / chromadb JS).
+    image: chromadb/chroma:1.0.7
     container_name: nemoris_chroma
     ports:
-      - "8001:8000"
+      - '8001:8000'
     volumes:
       - chroma_data:/chroma/chroma
     environment:
-      IS_PERSISTENT: "TRUE"
-      ANONYMIZED_TELEMETRY: "FALSE"
+      IS_PERSISTENT: 'TRUE'
+      ANONYMIZED_TELEMETRY: 'FALSE'
+    restart: unless-stopped
+
+  chroma_ui:
+    profiles: ['chroma', 'all']
+    # Menggunakan image alternatif yang tersedia untuk publik
+    image: fengzhichao/chromadb-admin:latest
+    container_name: nemoris_chroma_ui
+    # Image runs `next start -p 3001` — map host port to container 3001
+    ports:
+      - '3000:3001'
+    environment:
+      # In the admin "Chroma connection string" field use http://nemoris_chroma:8000 (not localhost:8001).
+      # /api/collections runs inside this container; localhost there is this container, where Chroma is not listening.
+      - CHROMA_URL=http://nemoris_chroma:8000
+    depends_on:
+      - nemoris_chroma
     restart: unless-stopped
 
   nemoris_waha:
-    profiles: ["waha", "all"]
-    image: devlikeapro/waha:latest
+    profiles: ['waha', 'all']
+    # -------------------------------------------------------------------------
+    # ACTIVE — WAHA Core (free) + GOWS
+    # Tags: https://hub.docker.com/r/devlikeapro/waha/tags
+    #   Apple Silicon: gows-arm | Intel / amd64 Linux: gows
+    # -------------------------------------------------------------------------
+    image: devlikeapro/waha:gows-arm
+    # -------------------------------------------------------------------------
+    # PLUS (licensed tar/image) — when you have access again:
+    # 1. Comment the Core `image:` line above.
+    # 2. Uncomment ONE block below + matching `volumes` line (Plus uses /app/sessions).
+    # 3. On Apple Silicon, keep `platform: linux/amd64` for typical Plus x86 images.
+    #
+    # docker load -i docker/merpati_engine_2025104.tar
+    # docker tag <LOADED_IMAGE>:<TAG> nemoris/waha-plus:merpati-2025104
+    # image: nemoris/waha-plus:merpati-2025104
+    # platform: linux/amd64
+    #
+    # Or pull: image: devlikeapro/waha-plus:gows
+    # platform: linux/amd64
+    # -------------------------------------------------------------------------
     container_name: nemoris_waha
     ports:
-      - "3002:3000"
-      - "3003:3002"
-    volumes:
-      - waha_sessions:/app/.sessions
+      # Dashboard/API on host http://localhost:4130
+      - '4130:3000'
+    env_file:
+      - ./waha.env
     environment:
+      WHATSAPP_DEFAULT_ENGINE: GOWS
+      # Do not set WAHA_PRINT_QR here — it overrides docker/waha.env.
+      WAHA_PRINT_ENGINES: 'true'
+      # Core (free) session dir; Plus often uses /app/sessions only (see volume comment)
       WAHA_LOCAL_STORE_BASE_DIR: /app/.sessions
+    volumes:
+      # Core (free) GOWS — session files
+      - waha_sessions:/app/.sessions
+      # PLUS GOWS — swap to this mount target when using waha-plus (comment line above):
+      # - waha_sessions:/app/sessions
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - 'host.docker.internal:host-gateway'
     restart: unless-stopped
 
   nemoris_llm_service:
-    profiles: ["llm"]
+    profiles: ['llm']
     build:
       context: ../apps/llm-service
       dockerfile: Dockerfile
     container_name: nemoris_llm_service
     ports:
-      - "4096:4096"
+      - '4096:4096'
     environment:
       PORT: 4096
       OPENAI_MODEL: ${OPENAI_MODEL:-google/gemini-2.5-flash}
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - 'host.docker.internal:host-gateway'
     restart: unless-stopped
     # Note: Requires opencode CLI in image for full containerization.
     # For host-based LLM, run: npm run proxy
 
   nemoris_backend:
-    profiles: ["backend", "all"]
+    profiles: ['backend', 'all']
     build:
       context: ../apps/backend
       dockerfile: Dockerfile
     container_name: nemoris_backend
     ports:
-      - "3001:3001"
+      - '3001:3001'
     env_file:
       - ../.env
     environment:
@@ -90,7 +133,7 @@ services:
       nemoris_waha:
         condition: service_started
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - 'host.docker.internal:host-gateway'
     restart: unless-stopped
 
 volumes:

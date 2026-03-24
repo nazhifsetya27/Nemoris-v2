@@ -69,6 +69,28 @@ Optional: Change other settings if needed.
 
 ---
 
+## WAHA (GOWS) — Core (free) vs Plus
+
+**Default in `docker/docker-compose.yml`:** **WAHA Core** image **`devlikeapro/waha:gows-arm`** (GOWS engine, no license). Pulls from Docker Hub — no `.tar` needed.
+
+- **Apple Silicon (M1/M2/M3):** `gows-arm` (already set).
+- **Intel / amd64 Linux:** edit compose to **`devlikeapro/waha:gows`** (or a pinned tag like `gows-2026.3.2`).
+
+```bash
+cp docker/waha.env.example docker/waha.env
+# Edit docker/waha.env — same WAHA_API_KEY in repo root .env for the backend
+docker-compose -f docker/docker-compose.yml --profile waha pull nemoris_waha
+docker-compose -f docker/docker-compose.yml --profile waha up -d nemoris_waha
+```
+
+**`docker compose -f` fails with “unknown shorthand flag: 'f'”:** use **`docker-compose`** (hyphen) as above.
+
+### WAHA Plus (optional, when you have a license again)
+
+Compose keeps a **commented** block for Plus: load your `.tar`, tag **`nemoris/waha-plus:...`**, switch **`image`**, **`platform: linux/amd64`** (typical on Apple Silicon), and swap the **volume** mount to **`/app/sessions`** as noted in `docker-compose.yml`. Vendor tar names like `merpati_engine_2025104.tar` stay **gitignored** under `docker/*.tar`.
+
+---
+
 ## Start Nemoris
 
 ### 1. Start All Services (Docker)
@@ -86,7 +108,7 @@ Or use the helper script:
 This will start:
 - **nemoris_db** - PostgreSQL database (port 5442)
 - **nemoris_chroma** - Vector database (port 8001)
-- **nemoris_waha** - WhatsApp HTTP API (port 3002)
+- **nemoris_waha** - WhatsApp HTTP API (WAHA Core GOWS by default, host port **4130**)
 - **nemoris_backend** - Main application (port 3001)
 
 **LLM Service:** Run on host (required for OpenCode):
@@ -147,7 +169,7 @@ Expected response:
 Open your browser and go to:
 
 ```
-http://localhost:3002
+http://localhost:4130
 ```
 
 ### 2. Login
@@ -156,7 +178,30 @@ http://localhost:3002
   - **Username**: admin
   - **Password**: admin
 
-### 3. Connect WhatsApp
+### 3. Webhook URL (WAHA in Docker — important)
+
+WAHA runs **inside a container**. **`http://localhost:3001`** there is the **container itself**, not your Mac, so webhooks will fail with `ECONNREFUSED`.
+
+- Nemoris backend on your **Mac** (e.g. `npm run dev`): set webhook to  
+  **`http://host.docker.internal:3001/webhook`**
+- Nemoris backend in **Docker** (`nemoris_backend` in this compose): use  
+  **`http://nemoris_backend:3001/webhook`**
+
+Use **`http://`** unless you have TLS on the backend. You can set defaults in **`docker/waha.env`** (`WHATSAPP_HOOK_URL`, `WHATSAPP_HOOK_EVENTS`) — see **`docker/waha.env.example`**.
+
+**Still failing after changing the URL?** The webhook is stored **per session** on disk. **Stop the session → delete it → create a new session** (or wipe the WAHA sessions volume) so WAHA stops using an old `https://localhost:3001/...` value.
+
+**Check from the WAHA container** (with Nemoris backend running on the host):
+
+```bash
+docker exec nemoris_waha curl -sS -o /dev/null -w "%{http_code}\n" \
+  -X POST http://host.docker.internal:3001/webhook \
+  -H "Content-Type: application/json" -d "{}"
+```
+
+You should see **`200`**. If you see **`000`** or connection errors, the backend is not listening on `0.0.0.0:3001` or Colima networking is off — run `colima status` and ensure **`host.docker.internal`** is available (compose adds `extra_hosts: host.docker.internal:host-gateway`).
+
+### 4. Connect WhatsApp
 
 1. Go to **Sessions** tab
 2. Click **Start** button on the default session
@@ -165,7 +210,7 @@ http://localhost:3002
 5. Go to **Settings** → **Linked Devices**
 6. Scan the QR code
 
-### 4. Verify Connection
+### 5. Verify Connection
 
 In WAHA dashboard, you should see the session status as "LOADED".
 
@@ -316,11 +361,17 @@ docker info
 # System Preferences → General → More ... → Docker Desktop
 ```
 
+### WAHA: Webhook works but session / QR still fails
+
+If `docker logs nemoris_waha` shows **`Client outdated (405)`** or **`err-client-outdated`**, WhatsApp is rejecting the **GOWS client version inside the image**. Updating Docker networking or the webhook URL will not fix that.
+
+**What to do:** install a **newer** WAHA build (pull a newer Core tag `devlikeapro/waha:gows-arm` / `gows`, or use Plus per comments in `docker/docker-compose.yml` and **`init.md`** § *WAHA (GOWS) — Core vs Plus*). Recreate the container, then delete and recreate the session.
+
 ### WAHA Not Connecting
 
-1. Check if port 3002 is available:
+1. Check if port 4130 is available:
    ```bash
-   lsof -i :3002
+   lsof -i :4130
    ```
 
 2. Check WAHA logs:

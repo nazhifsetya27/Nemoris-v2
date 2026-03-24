@@ -31,7 +31,7 @@ This document lists **runtime services** and the **main backend app** that make 
 |--------|------|--------------------|----------------|
 | **PostgreSQL** | Relational data (users, reminders, lists, etc.) | Host: `localhost:5442` → DB `nemoris` | Docker: `docker/docker-compose.yml` → `nemoris_db` |
 | **ChromaDB** | Vector store for Nemoris **memory** (embeddings + retrieval) | `http://localhost:8001` | Docker: `nemoris_chroma` |
-| **WAHA** | WhatsApp HTTP API (sessions, send/receive) | Dashboard/API: `http://localhost:3002` | Docker: `nemoris_waha` |
+| **WAHA** | WhatsApp HTTP API (sessions, send/receive) | Dashboard/API: `http://localhost:4130` | Docker: `nemoris_waha` · image: Core `devlikeapro/waha:gows-arm` (or `gows` on amd64) · secrets: `docker/waha.env` |
 | **Nemoris backend** | Express API, WhatsApp webhook, scheduling, business logic | `http://localhost:3001` | Code: `apps/backend/` · Docker: `nemoris_backend` |
 | **LLM service** | OpenCode-backed proxy (OpenAI-style `/v1/chat/completions`) | `http://localhost:4096` | Code: `apps/llm-service/` · Docker profile: `llm` (`nemoris_llm_service`) |
 
@@ -48,7 +48,7 @@ flowchart LR
   end
 
   subgraph docker["Docker (typical profile: all)"]
-    WAHA["WAHA\n:3002"]
+    WAHA["WAHA\nhost :4130"]
     PG[("PostgreSQL\n:5442")]
     CH["ChromaDB\n:8001"]
     BE["Nemoris backend\n:3001"]
@@ -112,11 +112,12 @@ flowchart LR
 
 | Item | Path / reference |
 |------|------------------|
-| Container & sessions volume | `docker/docker-compose.yml` → service `nemoris_waha` |
+| Container & sessions volume | `docker/docker-compose.yml` → `nemoris_waha` · Core GOWS: `/app/.sessions` · Plus GOWS: `/app/sessions` (see compose comments) |
+| WAHA env (API key, dashboard, hooks) | `docker/waha.env` (from `docker/waha.env.example`) |
 | WAHA client usage | `apps/backend/src/config/waha.js` |
 | Inbound path | Webhook mounted under `apps/backend/src/routes/webhook.js` → handlers |
 
-**Dashboard:** `http://localhost:3002` (default credentials are for local dev only; change for production).
+**Dashboard:** `http://localhost:4130` (set username/password in `docker/waha.env`; use the same `WAHA_API_KEY` in repo root `.env` for the backend).
 
 ---
 

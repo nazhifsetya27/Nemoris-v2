@@ -13,6 +13,11 @@ apps/**/.env.*
 
 # Local-only Docker env overrides (compose may use docker/.env)
 docker/.env
+docker/waha.env
+
+# WAHA Plus image export from vendor (docker load)
+merpati_engine_2025104.tar
+docker/*.tar
 
 # Logs & debug
 logs/

@@ -1,13 +1,11 @@
+import './config/loadEnv.js';
 import express from 'express';
-import dotenv from 'dotenv';
 import { logger } from './utils/logger.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import webhookRoutes from './routes/webhook.js';
 import apiRoutes from './routes/api.js';
 import { healthCheck } from './services/health.js';
 import { initScheduler } from './services/reminder.js';
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;

@@ -1,6 +1,12 @@
+import path from 'path';
+import { fileURLToPath } from 'url';
 import express from 'express';
 import { spawn } from 'child_process';
 import cors from 'cors';
+import dotenv from 'dotenv';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 const app = express();
 const PORT = process.env.PORT || 4096;
@@ -9,13 +15,25 @@ app.use(cors());
 app.use(express.json());
 
 const DEFAULT_MODEL = process.env.OPENAI_MODEL || 'google/gemini-2.5-flash';
+/** Optional: OpenAI subscription / GPT-5.x models often need e.g. medium, high, low */
+const OPENCODE_VARIANT = process.env.OPENCODE_VARIANT?.trim();
+
+console.log({ PORT, OPENCODE_VARIANT, DEFAULT_MODEL });
 
 function callOpenAI(prompt, model = DEFAULT_MODEL) {
   return new Promise((resolve, reject) => {
     const args = ['run', prompt, `--model=${model}`];
+    if (OPENCODE_VARIANT) {
+      args.push(`--variant=${OPENCODE_VARIANT}`);
+    }
 
     const proc = spawn('opencode', args, {
-      env: { ...process.env, OPENCODE_NO_BROWSER: '1', CI: '1', FORCE_COLOR: '0' },
+      env: {
+        ...process.env,
+        OPENCODE_NO_BROWSER: '1',
+        CI: '1',
+        FORCE_COLOR: '0',
+      },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
@@ -73,6 +91,7 @@ app.post('/v1/chat/completions', async (req, res) => {
     const prompt = lastMessage?.content || '';
 
     const response = await callOpenAI(prompt, model || DEFAULT_MODEL);
+    console.log({ response });
 
     res.json({
       id: `chatcmpl-${Date.now()}`,
@@ -136,6 +155,12 @@ app.get('/health', (req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Nemoris LLM Service (OpenCode Proxy) running on http://localhost:${PORT}`);
-  console.log(`Default model: ${DEFAULT_MODEL}`);
+  console.log(
+    `Nemoris LLM Service (OpenCode Proxy) running on http://localhost:${PORT}`
+  );
+  console.log(
+    `Default model: ${DEFAULT_MODEL}${
+      OPENCODE_VARIANT ? ` (variant: ${OPENCODE_VARIANT})` : ''
+    }`
+  );
 });

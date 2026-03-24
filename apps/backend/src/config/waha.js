@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const WAHA_URL = process.env.WAHA_URL || 'http://localhost:3000';
+const WAHA_URL = process.env.WAHA_URL || 'http://localhost:4130';
 const WAHA_SESSION = process.env.WAHA_SESSION || 'default';
 const WAHA_API_KEY = process.env.WAHA_API_KEY || '';
 
