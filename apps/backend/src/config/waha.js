@@ -53,6 +53,9 @@ async function processQueue() {
       resolve(true);
     } catch (error) {
       console.error('Queue message send error:', error.response?.data || error.message);
+      // Still apply delay to avoid rapid-fire failures when WAHA is down
+      const delay = getRandomDelay();
+      await new Promise(r => setTimeout(r, delay));
       reject(error);
     }
   }

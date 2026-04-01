@@ -581,3 +581,61 @@ describe('normalization → intent integration', () => {
     expect(result.intent).toBe('memory');
   });
 });
+
+// ─── Regression: HIGH-1 pronoun fix — standalone letters no longer replaced ────
+
+describe('regression: pronoun regex no longer matches standalone w/u/ak', () => {
+  it('standalone "w" is NOT replaced with "saya"', () => {
+    expect(normalizePronouns('w')).toBe('w');
+  });
+
+  it('standalone "u" is NOT replaced with "kamu"', () => {
+    expect(normalizePronouns('u')).toBe('u');
+  });
+
+  it('standalone "ak" is NOT replaced with "saya"', () => {
+    expect(normalizePronouns('ak')).toBe('ak');
+  });
+
+  it('"aku" is still replaced with "saya"', () => {
+    expect(normalizePronouns('aku lapar')).toBe('saya lapar');
+  });
+
+  it('"kamu" is still replaced with "kamu" (identity)', () => {
+    expect(normalizePronouns('kamu hebat')).toBe('kamu hebat');
+  });
+});
+
+// ─── Regression: HIGH-2 ambiguous time — no auto-PM for bare "jam X" ──────────
+
+describe('regression: "jam X" without period word keeps original hour', () => {
+  it('"jam 5" without period does NOT become 17:00', () => {
+    const result = parseReminder('ingatkan saya jam 5 bangun', 'id');
+    if (result.datetime) {
+      // Should be 5:00, NOT 17:00
+      expect(result.datetime.getHours()).toBe(5);
+    }
+  });
+
+  it('"jam 3 sore" with explicit period still becomes 15:00', () => {
+    const result = parseReminder('ingatkan saya jam 3 sore beli obat', 'id');
+    expect(result.datetime).toBeInstanceOf(Date);
+    expect(result.datetime.getHours()).toBe(15);
+  });
+
+  it('"jam 8 malam" with explicit period becomes 20:00', () => {
+    const result = parseReminder('ingatkan saya jam 8 malam tidur', 'id');
+    expect(result.datetime).toBeInstanceOf(Date);
+    expect(result.datetime.getHours()).toBe(20);
+  });
+});
+
+// ─── Regression: MEDIUM-4 detectIntent no longer duplicates strong patterns ───
+
+describe('regression: detectIntent only checks weak patterns', () => {
+  it('question guard works without strong patterns interfering', () => {
+    const result = detectIntent('apa nama kucing saya?');
+    expect(result).not.toBeNull();
+    expect(result.intent).toBe('question');
+  });
+});

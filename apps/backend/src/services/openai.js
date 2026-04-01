@@ -185,7 +185,7 @@ export async function chatCompletion(messages, model = DEFAULT_MODEL, maxTokens 
     });
     return response.choices[0].message.content;
   } catch (error) {
-    console.error('Error in chat completion:', error);
+    logger.error('Error in chat completion:', error);
     throw error;
   }
 }
@@ -258,8 +258,7 @@ export async function classifyIntentWithLLM(
     } else {
       // Try local Ollama first (free), fall back to cloud
       try {
-        const localOllama = new OpenAI({ apiKey: 'not-needed', baseURL: `${LLM_URL}/v1` });
-        const localResponse = await localOllama.chat.completions.create({
+        const localResponse = await openai.chat.completions.create({
           model: LOCAL_CLASSIFY_MODEL,
           messages: classifyMessages,
           temperature: 0.1,
@@ -335,7 +334,7 @@ export async function extractEntitiesWithLLM(text, userContext = '', language = 
       summary: result.summary || null,
     };
   } catch (error) {
-    console.error('Error extracting entities:', error);
+    logger.error('Error extracting entities:', error);
     return { isMemory: false, type: null, entities: {}, summary: null };
   }
 }
@@ -393,7 +392,7 @@ ${nameLine}`;
     setCachedResponse(cacheKey, result);
     return result;
   } catch (error) {
-    console.error('Error generating response:', error);
+    logger.error('Error generating response:', error);
     throw error;
   }
 }

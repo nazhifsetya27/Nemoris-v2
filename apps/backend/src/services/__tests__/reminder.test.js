@@ -189,6 +189,39 @@ describe('checkAndSendReminders', () => {
       const createdData = mockCreate.mock.calls[0][0].data;
       expect(createdData.scheduledAt.getMonth()).toBe(6); // July (0-indexed)
     });
+
+    it('clamps monthly recurrence on edge date: Jan 31 → Feb 28 (HIGH-3 fix)', async () => {
+      const jan31 = new Date('2025-01-31T10:00:00Z');
+      mockFindMany.mockResolvedValueOnce([
+        {
+          id: 'rem-edge', task: 'edge case', scheduledAt: jan31, recurrence: 'monthly',
+          userId: 'u1', user: { chatId: '123@c.us', name: null },
+        },
+      ]);
+
+      await checkAndSendReminders();
+
+      const createdData = mockCreate.mock.calls[0][0].data;
+      // Should be Feb 28 (2025 is not a leap year), NOT Mar 3
+      expect(createdData.scheduledAt.getMonth()).toBe(1); // February
+      expect(createdData.scheduledAt.getDate()).toBe(28);
+    });
+
+    it('clamps monthly recurrence: Mar 31 → Apr 30', async () => {
+      const mar31 = new Date('2025-03-31T10:00:00Z');
+      mockFindMany.mockResolvedValueOnce([
+        {
+          id: 'rem-edge2', task: 'pay bills', scheduledAt: mar31, recurrence: 'monthly',
+          userId: 'u1', user: { chatId: '123@c.us', name: null },
+        },
+      ]);
+
+      await checkAndSendReminders();
+
+      const createdData = mockCreate.mock.calls[0][0].data;
+      expect(createdData.scheduledAt.getMonth()).toBe(3); // April
+      expect(createdData.scheduledAt.getDate()).toBe(30);
+    });
   });
 
   describe('negative: no pending reminders', () => {

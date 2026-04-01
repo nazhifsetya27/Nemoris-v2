@@ -10,7 +10,7 @@ const CLEANUP_INTERVAL = 10 * 60 * 1000; // 10 minutes
 const contextCache = new Map();
 
 // Periodic cleanup of expired entries
-setInterval(() => {
+const cleanupTimer = setInterval(() => {
   const now = Date.now();
   for (const [key, ctx] of contextCache) {
     if (now - ctx.updatedAt > CONTEXT_TTL) {
@@ -18,6 +18,10 @@ setInterval(() => {
     }
   }
 }, CLEANUP_INTERVAL);
+
+export function stopContextCleanup() {
+  clearInterval(cleanupTimer);
+}
 
 /**
  * Get conversation context for a user. Returns null if expired or not set.

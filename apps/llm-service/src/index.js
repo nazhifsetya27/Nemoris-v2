@@ -79,6 +79,7 @@ function callOpenAI(messages, model = DEFAULT_MODEL) {
     });
 
     proc.on('close', (code) => {
+      clearTimeout(timeout);
       if (code !== 0 && !stdout) {
         reject(new Error(stderr || `Process exited with code ${code}`));
         return;
@@ -106,7 +107,7 @@ function callOpenAI(messages, model = DEFAULT_MODEL) {
       reject(err);
     });
 
-    setTimeout(() => {
+    const timeout = setTimeout(() => {
       proc.kill();
       reject(new Error('Timeout'));
     }, 120000);
