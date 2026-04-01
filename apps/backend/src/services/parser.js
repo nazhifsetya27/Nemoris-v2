@@ -435,29 +435,36 @@ export function parseReminder(text, language = 'en') {
     processedText = processedText.replace(/(\d+)\s*hari\s*lagi/gi, 'in $1 days');
     processedText = processedText.replace(/setengah\s*jam\s*lagi/gi, 'in 30 minutes');
 
-    // Compound: "besok pagi" → "tomorrow at 8:00", "nanti siang" → "today at 12:00"
-    processedText = processedText.replace(/nanti\s+(pagi|siang|sore|malam|subuh)/gi, (_, period) => {
-      const hours = ID_TIME_WORDS[period.toLowerCase()]?.hours || 12;
-      return `today at ${hours}:00`;
-    });
-    processedText = processedText.replace(/besok\s+(pagi|siang|sore|malam|subuh)/gi, (_, period) => {
-      const hours = ID_TIME_WORDS[period.toLowerCase()]?.hours || 12;
-      return `tomorrow at ${hours}:00`;
-    });
-    processedText = processedText.replace(/lusa\s+(pagi|siang|sore|malam|subuh)/gi, (_, period) => {
-      const hours = ID_TIME_WORDS[period.toLowerCase()]?.hours || 12;
-      return `in 2 days at ${hours}:00`;
-    });
-
-    // "jam X" / "pukul X" → "at X:00"
+    // "jam X" / "pukul X" → "at X:00" (resolve explicit clock times FIRST)
+    // Context: check if text has a period hint nearby (pagi/siang/sore/malam)
+    const hasPeriodHint = /(?:pagi|siang|sore|malam|subuh)/i.test(processedText);
     processedText = processedText.replace(/(?:jam|pukul)\s+(\d{1,2})(?:[.:](\d{2}))?\s*(pagi|siang|sore|malam)?/gi, (_, h, m, period) => {
       let hours = parseInt(h);
       if (period) {
         const p = period.toLowerCase();
         if ((p === 'sore' || p === 'malam') && hours < 12) hours += 12;
         if (p === 'pagi' && hours === 12) hours = 0;
+      } else if (hasPeriodHint) {
+        // Use nearby period hint: "besok sore jam 3" → sore context → 15:00
+        if (/sore|malam/i.test(processedText) && hours > 0 && hours < 12) hours += 12;
       }
       return `at ${hours}:${m || '00'}`;
+    });
+
+    // Compound date+period: "besok pagi" → "tomorrow at 8:00"
+    // Only use default period time if no explicit "jam X" was already resolved above
+    const hasExplicitTime = /at \d{1,2}:\d{2}/.test(processedText);
+    processedText = processedText.replace(/nanti\s+(pagi|siang|sore|malam|subuh)/gi, (_, period) => {
+      if (hasExplicitTime) return 'today';
+      return `today at ${ID_TIME_WORDS[period.toLowerCase()]?.hours || 12}:00`;
+    });
+    processedText = processedText.replace(/besok\s+(pagi|siang|sore|malam|subuh)/gi, (_, period) => {
+      if (hasExplicitTime) return 'tomorrow';
+      return `tomorrow at ${ID_TIME_WORDS[period.toLowerCase()]?.hours || 12}:00`;
+    });
+    processedText = processedText.replace(/lusa\s+(pagi|siang|sore|malam|subuh)/gi, (_, period) => {
+      if (hasExplicitTime) return 'in 2 days';
+      return `in 2 days at ${ID_TIME_WORDS[period.toLowerCase()]?.hours || 12}:00`;
     });
 
     const idParse = parseIndonesianDateTime(processedText);
@@ -481,7 +488,12 @@ export function parseReminder(text, language = 'en') {
       ? /ingatkan saya untuk|ingatkan saya|ingatkan|bikin reminder|pasang alarm|inget(?:in|kan)?(?:\s+saya)?|tolong ingetin|nanti\s+ingetin/i
       : /remind me to|remind me|remember to|don't forget to|set a reminder to|alert me/i;
 
-    results.task = remainingText.replace(prefixPatterns, '').trim() || null;
+    results.task = remainingText
+      .replace(prefixPatterns, '')
+      .replace(/^\s*:?\d{0,2}\s*/, '') // strip leftover ":00" or "00" from time parsing
+      .replace(/\s*at\s+\d{1,2}:\d{2}\s*/g, ' ') // strip any remaining "at HH:MM"
+      .replace(/\s{2,}/g, ' ')
+      .trim() || null;
   } else {
     const timeMatch = processedText.match(/at\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
     if (timeMatch) {
