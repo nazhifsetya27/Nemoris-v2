@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { logger } from '../utils/logger.js';
 
 const WAHA_URL = process.env.WAHA_URL || 'http://localhost:4130';
 const WAHA_SESSION = process.env.WAHA_SESSION || 'default';
@@ -100,13 +101,32 @@ export async function sendWhatsAppMessageWithButtonsImmediate(chatId, text, butt
   }
 }
 
+/**
+ * Resolve a LID JID (e.g. 204917302104303@lid) to a phone JID via WAHA.
+ * @param {string} lidJid - Full sender id including @lid
+ * @returns {Promise<string|null>} Phone JID (e.g. 628123@c.us) or null
+ */
+export async function getPhoneNumberFromLid(lidJid) {
+  try {
+    const response = await wahaClient.get(
+      `/api/${WAHA_SESSION}/lids/${encodeURIComponent(lidJid)}`
+    );
+    return response.data?.pn || null;
+  } catch (error) {
+    logger.error(
+      '[WAHA] Failed to get phone number from LID:',
+      error.response?.data || error.message
+    );
+    return null;
+  }
+}
+
 export async function getContact(chatId) {
   try {
     if (chatId?.includes('@lid')) {
-      const lid = chatId.split('@')[0];
-      const response = await wahaClient.get(`/api/${WAHA_SESSION}/lids/${encodeURIComponent(lid)}`);
-      if (response.data?.pn) {
-        return { id: response.data.pn, pushName: null };
+      const pn = await getPhoneNumberFromLid(chatId);
+      if (pn) {
+        return { id: pn, pushName: null };
       }
       return null;
     }

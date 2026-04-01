@@ -30,7 +30,8 @@ export async function checkAndSendReminders() {
 
     for (const reminder of pendingReminders) {
       try {
-        const message = `⏰ Reminder: ${reminder.task}`;
+        const greeting = reminder.user.name ? `Hai ${reminder.user.name}! ` : '';
+        const message = `${greeting}⏰ Waktunya *${reminder.task}*!\n\nKamu sudah minta diingatkan untuk ini. Semangat! 💪`;
         await sendWhatsAppMessage(reminder.user.chatId, message);
 
         await prisma.reminder.update({

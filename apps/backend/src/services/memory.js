@@ -15,15 +15,15 @@ export async function storeMemory(userId, type, content, metadata = {}) {
   });
 
   try {
-    const collection = await getOrCreateCollection(userId);
     const embedding = await generateEmbedding(content);
-    await addMemoryEmbedding(collection, memory.id, content, embedding);
-
-    await prisma.memory.update({
-      where: { id: memory.id },
-      data: { chromaId: memory.id },
-    });
-
+    if (embedding) {
+      const collection = await getOrCreateCollection(userId);
+      await addMemoryEmbedding(collection, memory.id, content, embedding);
+      await prisma.memory.update({
+        where: { id: memory.id },
+        data: { chromaId: memory.id },
+      });
+    }
     logger.info(`Memory stored for user ${userId}: ${content.substring(0, 50)}...`);
   } catch (error) {
     logger.error('Error storing memory embedding:', error);
@@ -34,8 +34,19 @@ export async function storeMemory(userId, type, content, metadata = {}) {
 
 export async function retrieveRelevantMemories(userId, query, topK = 5) {
   try {
-    const collection = await getOrCreateCollection(userId);
     const embedding = await generateEmbedding(query);
+    if (!embedding) {
+      // No embedding provider — fall back to recent memories from DB
+      const memories = await prisma.memory.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: topK,
+        select: { content: true },
+      });
+      return memories.map((m) => m.content);
+    }
+
+    const collection = await getOrCreateCollection(userId);
     const results = await searchMemories(collection, embedding, topK);
 
     if (!results.ids || results.ids.length === 0 || !results.ids[0].length) {

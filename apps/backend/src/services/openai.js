@@ -1,9 +1,10 @@
 import OpenAI from 'openai';
-import axios from 'axios';
+import { logger } from '../utils/logger.js';
 
 const LLM_PROVIDER = process.env.LLM_PROVIDER || 'openai';
 const LLM_URL = process.env.LLM_URL || 'http://localhost:11434';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'not-needed';
+const OLLAMA_CLOUD_API_KEY = process.env.OLLAMA_CLOUD_API_KEY || '';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const EMBEDDING_MODEL = process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small';
 
@@ -16,8 +17,7 @@ function initOpenAI() {
       apiKey: 'not-needed',
       baseURL: `${LLM_URL}/v1`,
     });
-    embeddingModel = 'text-embedding-3-small';
-  } else {
+  } else if (LLM_PROVIDER !== 'ollama-cloud') {
     openai = new OpenAI({
       apiKey: OPENAI_API_KEY,
     });
@@ -26,24 +26,71 @@ function initOpenAI() {
 
 initOpenAI();
 
+/** Ollama Cloud uses native /api/chat (not OpenAI-compatible). */
+async function ollamaCloudChat(messages, model, maxTokens = 200) {
+  const response = await fetch('https://api.ollama.com/api/chat', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OLLAMA_CLOUD_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      stream: false,
+      options: { num_predict: maxTokens, temperature: 0.7 },
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`Ollama Cloud ${response.status}: ${await response.text()}`);
+  }
+  const data = await response.json();
+  return data.message?.content || '';
+}
+
 export const DEFAULT_MODEL = OPENAI_MODEL;
-export const IS_LOCAL = LLM_PROVIDER !== 'openai' && LLM_PROVIDER !== 'google';
+export const IS_LOCAL = !['openai', 'google', 'ollama-cloud'].includes(LLM_PROVIDER);
 
 const SYSTEM_PROMPTS = {
   en: {
     extraction: `Extract info from user message. Types: fact, preference, event.
 Response JSON: {"type":"fact|preference|event","entities":{},"isMemory":true|false,"summary":"brief summary"}`,
-    response: `You are Nemoris, a friendly personal AI assistant. 
-Rules: Be conversational, concise, honest if unsure, use user's name.
-Format: Plain text, no markdown.`,
+    response: `You are Nemoris, a personal AI memory assistant on WhatsApp. You are an AI, not a person — you have no family, feelings, or personal experiences.
+You store and recall things the USER tells you. Memories below belong to the USER, not you. When the user asks "who is my X?", answer about THEIR X. When the user asks about YOU, remind them you are an AI named Nemoris. Never reveal your model name, architecture, or who trained you.
+If no relevant memory exists, say you don't have that info yet and ask the user to tell you.
+If the user asks something unrelated to memory or personal info (e.g. coding, creating files, general knowledge), politely say you are a memory assistant and can only help remember personal information.
+Rules: Be concise and warm. Keep replies short (1-2 sentences max). Do NOT ask follow-up questions unless the user's message is unclear. Do NOT suggest topics or steer the conversation. Only respond to what the user said.
+Format: Plain text only, no markdown, no asterisks, no bullet points. Emojis are OK but use sparingly — max 1 per message, only when it adds warmth.`,
   },
   id: {
     extraction: `Ekstrak informasi dari pesan pengguna. Tipe: fact, preference, event.
 Response JSON: {"type":"fact|preference|event","entities":{},"isMemory":true|false,"summary":"ringkasan singkat"}`,
-    response: `Anda adalah Nemoris, asisten AI personal yang ramah.
-Aturan: Percakapan alami, singkat, jujur jika tidak tahu, gunakan nama pengguna.
-Format: Teks biasa, tanpa markdown.`,
+    response: `Kamu adalah Nemoris, asisten AI memory personal di WhatsApp. Kamu adalah AI, bukan manusia — kamu tidak punya keluarga, perasaan, atau pengalaman pribadi.
+Kamu menyimpan dan mengingat hal-hal yang diberitahu PENGGUNA. Memori di bawah milik PENGGUNA, bukan milik kamu. Jika pengguna bertanya "siapa X saya?", jawab tentang X MEREKA. Jika pengguna bertanya tentang KAMU, ingatkan bahwa kamu adalah AI bernama Nemoris. Jangan pernah ungkapkan nama model, arsitektur, atau siapa yang melatihmu.
+Jika tidak ada memori yang relevan, katakan kamu belum punya info tersebut dan minta pengguna memberitahu.
+Jika pengguna bertanya hal yang tidak terkait memori atau info personal (misalnya coding, membuat file, pengetahuan umum), katakan dengan sopan bahwa kamu adalah asisten memory dan hanya bisa membantu mengingat informasi personal.
+Aturan: Singkat dan hangat. Jawab maksimal 1-2 kalimat. JANGAN ajukan pertanyaan lanjutan kecuali pesan pengguna tidak jelas. JANGAN menyarankan topik atau mengarahkan percakapan. Hanya tanggapi apa yang pengguna katakan.
+Format: Teks biasa saja, tanpa markdown, tanpa asterisk, tanpa bullet point. Emoji boleh tapi hemat — maksimal 1 per pesan, hanya kalau menambah kesan hangat.`,
   },
+};
+
+const INTENT_CLASSIFIER_PROMPTS = {
+  en: `You classify the user's latest WhatsApp message for Nemoris (reminders, memory storage, or general chat).
+
+Intents:
+- reminder: user wants a time-based alert or recurring nudge, OR a short follow-up that completes scheduling (e.g. only a time or date after Nemoris asked for details or gave reminderError).
+- memory: user wants to store a fact, preference, or note for later recall (not a scheduled alert).
+- question: general chat, asking for information, or anything that is not clearly reminder or memory.
+
+Use the full conversation transcript. Output ONLY valid JSON: {"intent":"reminder"|"memory"|"question"}`,
+  id: `Anda mengklasifikasi pesan WhatsApp terbaru pengguna untuk Nemoris (pengingat, penyimpanan memori, atau obrolan umum).
+
+Maksud:
+- reminder: ingin pemberitahuan berbasis waktu atau pengulangan, ATAU balasan singkat yang melengkapi jadwal (misalnya hanya jam/tanggal setelah Nemoris meminta detail atau menolak format pengingat).
+- memory: ingin menyimpan fakta, preferensi, atau catatan untuk diingat nanti (bukan jadwal alarm).
+- question: obrolan umum, bertanya informasi, atau yang tidak jelas sebagai reminder/memory.
+
+Gunakan transkrip percakapan. Hanya JSON valid: {"intent":"reminder"|"memory"|"question"}`,
 };
 
 const responseCache = new Map();
@@ -72,7 +119,7 @@ function setCachedResponse(key, response) {
 }
 
 export async function generateEmbedding(text) {
-  if (LLM_PROVIDER === 'local' || LLM_PROVIDER === 'ollama') {
+  if (LLM_PROVIDER === 'local' || LLM_PROVIDER === 'ollama' || LLM_PROVIDER === 'ollama-cloud') {
     try {
       const response = await fetch(`${LLM_URL}/api/embeddings`, {
         method: 'POST',
@@ -83,11 +130,11 @@ export async function generateEmbedding(text) {
         }),
       });
       const data = await response.json();
-      return data.embedding;
+      if (data.embedding) return data.embedding;
     } catch (error) {
-      console.error('Error generating embedding (local):', error);
-      return Array(768).fill(0);
+      logger.warn('Embedding model not available, skipping');
     }
+    return null;
   }
 
   if (OPENAI_API_KEY && OPENAI_API_KEY !== 'your-openai-api-key-here') {
@@ -99,45 +146,27 @@ export async function generateEmbedding(text) {
       });
       return response.data[0].embedding;
     } catch (error) {
-      console.error('Error generating embedding (OpenAI):', error);
+      logger.warn('OpenAI embedding failed, skipping');
     }
   }
 
-  console.warn('No embedding provider available, using zeros');
-  return Array(1536).fill(0);
+  return null;
 }
 
 async function chatCompletionLocal(messages, model, maxTokens = 500) {
   try {
-    const isOpenCodeProxy = LLM_PROVIDER === 'opencode';
-    
-    if (isOpenCodeProxy) {
-      const response = await axios.post(`${LLM_URL}/v1/chat/completions`, {
-        model: model,
-        messages: messages,
-        temperature: 0.7,
-        max_tokens: maxTokens,
-      }, {
-        timeout: 120000,
-      });
-      return response.data.choices[0].message.content;
+    if (LLM_PROVIDER === 'ollama-cloud') {
+      return await ollamaCloudChat(messages, model, maxTokens);
     }
-    
-    const response = await fetch(`${LLM_URL}/api/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: model,
-        messages: messages,
-        temperature: 0.7,
-        max_tokens: maxTokens,
-        stream: false,
-      }),
+    const response = await openai.chat.completions.create({
+      model: model,
+      messages: messages,
+      temperature: 0.7,
+      max_tokens: maxTokens,
     });
-    const data = await response.json();
-    return data.message?.content || data.choices?.[0]?.message?.content || '';
+    return response.choices[0].message.content;
   } catch (error) {
-    console.error('Error in local chat completion:', error);
+    logger.error('Error in chat completion:', error);
     throw error;
   }
 }
@@ -161,6 +190,100 @@ export async function chatCompletion(messages, model = DEFAULT_MODEL, maxTokens 
   }
 }
 
+function parseJsonIntentResponse(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  try {
+    const cleaned = raw
+      .replace(/^\s*```(?:json)?\s*/i, '')
+      .replace(/\s*```\s*$/i, '')
+      .trim();
+    const parsed = JSON.parse(cleaned);
+    const intent = parsed.intent;
+    if (intent === 'reminder' || intent === 'memory' || intent === 'question') {
+      return { intent };
+    }
+  } catch {
+    // invalid JSON or shape
+  }
+  return null;
+}
+
+/**
+ * Classify user intent using recent conversation + latest message (for ambiguous / follow-up text).
+ * @param {string} text
+ * @param {{ role: string, content: string }[]} conversationHistory oldest-first (excludes current message)
+ * @param {string} language hint 'en' | 'id'
+ * @returns {Promise<{ intent: string, source: string } | null>}
+ */
+export async function classifyIntentWithLLM(
+  text,
+  conversationHistory = [],
+  language = 'en'
+) {
+  const systemPrompt =
+    INTENT_CLASSIFIER_PROMPTS[language] || INTENT_CLASSIFIER_PROMPTS.en;
+  const historyStr =
+    conversationHistory.length > 0
+      ? conversationHistory
+          .map(
+            (h) =>
+              `${h.role === 'user' ? 'User' : 'Nemoris'}: ${(h.content || '').slice(0, 500)}`
+          )
+          .join('\n')
+      : '(no prior messages)';
+  const userContent = `Conversation:\n${historyStr}\n\nLatest message:\n${(text || '').slice(0, 2000)}`;
+
+  // Prefer local qwen2.5:3b for classification (free, fast on M1)
+  // Classification is simpler than generation — small model handles it fine
+  const LOCAL_CLASSIFY_MODEL = 'qwen2.5:3b';
+  const classifyMessages = [
+    { role: 'system', content: `${systemPrompt}\nReply with JSON only, no markdown or other text.` },
+    { role: 'user', content: userContent },
+  ];
+
+  try {
+    let raw;
+    if (LLM_PROVIDER === 'openai') {
+      const response = await openai.chat.completions.create({
+        model: OPENAI_MODEL,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userContent },
+        ],
+        temperature: 0.1,
+        max_tokens: 80,
+        response_format: { type: 'json_object' },
+      });
+      raw = response.choices[0].message.content;
+    } else {
+      // Try local Ollama first (free), fall back to cloud
+      try {
+        const localOllama = new OpenAI({ apiKey: 'not-needed', baseURL: `${LLM_URL}/v1` });
+        const localResponse = await localOllama.chat.completions.create({
+          model: LOCAL_CLASSIFY_MODEL,
+          messages: classifyMessages,
+          temperature: 0.1,
+          max_tokens: 80,
+        });
+        raw = localResponse.choices[0].message.content;
+      } catch {
+        logger.info('Local LLM classification failed, trying cloud...');
+        raw = await chatCompletionLocal(classifyMessages, DEFAULT_MODEL, 80);
+      }
+    }
+
+    const result = parseJsonIntentResponse(raw);
+    if (result) {
+      return { ...result, source: 'llm' };
+    }
+    logger.warn('classifyIntentWithLLM: invalid intent in response:', raw);
+    return null;
+  } catch (error) {
+    logger.error('classifyIntentWithLLM failed:', error);
+    return null;
+  }
+}
+
 export async function extractEntitiesWithLLM(text, userContext = '', language = 'en') {
   const prompts = SYSTEM_PROMPTS[language] || SYSTEM_PROMPTS.en;
   
@@ -179,7 +302,11 @@ export async function extractEntitiesWithLLM(text, userContext = '', language = 
         300
       );
       
-      const parsed = JSON.parse(response);
+      const cleaned = response
+        .replace(/^\s*```(?:json)?\s*/i, '')
+        .replace(/\s*```\s*$/i, '')
+        .trim();
+      const parsed = JSON.parse(cleaned);
       return {
         type: parsed.type || 'fact',
         entities: parsed.entities || {},
@@ -227,7 +354,7 @@ export async function generateResponse(userQuestion, retrievedMemories = [], con
     : '';
 
   const history = conversationHistory.length > 0
-    ? `Chat:\n${conversationHistory.slice(-3).map(h => `${h.role === 'user' ? 'User' : 'Nemoris'}: ${h.content.slice(0, 100)}`).join('\n')}`
+    ? `Chat:\n${conversationHistory.map(h => `${h.role === 'user' ? 'User' : 'Nemoris'}: ${h.content.slice(0, 200)}`).join('\n')}`
     : '';
 
   const nameLine = userName ? `User name: ${userName}` : '';
@@ -248,7 +375,7 @@ ${nameLine}`;
           { role: 'user', content: userQuestion.slice(0, 2000) },
         ],
         DEFAULT_MODEL,
-        300
+        200
       );
     } else {
       const response = await openai.chat.completions.create({
@@ -258,7 +385,7 @@ ${nameLine}`;
           { role: 'user', content: userQuestion.slice(0, 2000) },
         ],
         temperature: 0.7,
-        max_tokens: 300,
+        max_tokens: 200,
       });
       result = response.choices[0].message.content;
     }
