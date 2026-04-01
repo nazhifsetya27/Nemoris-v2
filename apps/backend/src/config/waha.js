@@ -29,14 +29,23 @@ async function processQueue() {
   isProcessingQueue = true;
   
   while (messageQueue.length > 0) {
-    const { chatId, text, resolve, reject } = messageQueue.shift();
-    
+    const { chatId, text, resolve, reject, isButtons, buttons } = messageQueue.shift();
+
     try {
-      await wahaClient.post(`/api/sendText`, {
-        session: WAHA_SESSION,
-        chatId: chatId,
-        text: text,
-      });
+      if (isButtons && buttons) {
+        await wahaClient.post(`/api/sendButtons`, {
+          session: WAHA_SESSION,
+          chatId: chatId,
+          text: text,
+          buttons: buttons,
+        });
+      } else {
+        await wahaClient.post(`/api/sendText`, {
+          session: WAHA_SESSION,
+          chatId: chatId,
+          text: text,
+        });
+      }
       
       const delay = getRandomDelay();
       await new Promise(r => setTimeout(r, delay));
