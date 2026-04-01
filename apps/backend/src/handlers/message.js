@@ -28,20 +28,6 @@ import {
 import { getContext, setContext, inferContextFromResponse } from '../services/context.js';
 import { logger } from '../utils/logger.js';
 
-const HUMAN_DELAY_MIN = 1000;
-const HUMAN_DELAY_MAX = 4000;
-
-function getRandomDelay() {
-  return (
-    Math.floor(Math.random() * (HUMAN_DELAY_MAX - HUMAN_DELAY_MIN + 1)) +
-    HUMAN_DELAY_MIN
-  );
-}
-
-async function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 /**
  * 3-tier intent resolution:
  *   Tier 1: Lexical fast-path (regex, 0ms)
@@ -107,7 +93,7 @@ export async function handleIncomingMessage(payload) {
     return;
   }
 
-  await delay(getRandomDelay());
+  if (['ping', 'test'].includes(text.trim().toLowerCase())) return;
 
   const chatId = from;
   let user = await prisma.user.findUnique({ where: { chatId } });
@@ -161,10 +147,7 @@ export async function handleIncomingMessage(payload) {
   const ctx = inferContextFromResponse(response, intent.intent, t);
   setContext(user.id, ctx);
 
-  const shouldRespond = !['ping', 'PING', 'test', 'TEST'].includes(text.trim());
-  if (shouldRespond) {
-    await sendWhatsAppMessage(chatId, response);
-  }
+  await sendWhatsAppMessage(chatId, response);
 }
 
 async function handleReminder(userId, text, intent, language, t) {
@@ -240,6 +223,7 @@ async function handleQuestion(userId, text, language, t) {
     }
 
     const response = await generateResponse(
+      userId,
       text,
       relevantMemories,
       conversationHistory,

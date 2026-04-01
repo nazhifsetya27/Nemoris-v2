@@ -97,9 +97,9 @@ const responseCache = new Map();
 const MAX_CACHE_SIZE = 100;
 const CACHE_TTL = 5 * 60 * 1000;
 
-function getCacheKey(text, memories) {
+function getCacheKey(userId, text, memories, language) {
   const memHash = memories.slice(0, 3).sort().join('|');
-  return `${text.slice(0, 50)}:${memHash.slice(0, 30)}`;
+  return `${userId}:${language}:${text.slice(0, 50)}:${memHash.slice(0, 30)}`;
 }
 
 function getCachedResponse(key) {
@@ -340,8 +340,8 @@ export async function extractEntitiesWithLLM(text, userContext = '', language = 
   }
 }
 
-export async function generateResponse(userQuestion, retrievedMemories = [], conversationHistory = [], language = 'en', userName = null) {
-  const cacheKey = getCacheKey(userQuestion, retrievedMemories);
+export async function generateResponse(userId, userQuestion, retrievedMemories = [], conversationHistory = [], language = 'en', userName = null) {
+  const cacheKey = getCacheKey(userId, userQuestion, retrievedMemories, language);
   const cached = getCachedResponse(cacheKey);
   if (cached) {
     return cached;

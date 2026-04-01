@@ -23,7 +23,7 @@ export async function checkAndSendReminders() {
     const pendingReminders = await prisma.reminder.findMany({
       where: {
         sent: false,
-        scheduledAt: { gte: now, lte: fiveMinutesFromNow },
+        scheduledAt: { lte: fiveMinutesFromNow },
       },
       include: { user: { select: { chatId: true, name: true } } },
     });
