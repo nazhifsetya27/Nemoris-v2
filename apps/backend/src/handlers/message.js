@@ -108,7 +108,8 @@ export async function handleIncomingMessage(payload) {
     });
     logger.info(`New user registered: ${chatId}, name: ${userName}`);
 
-    const t = getResponseTemplates('en');
+    const detectedLang = detectLanguage(text);
+    const t = getResponseTemplates(detectedLang);
     const welcomeMessage = t.welcome;
     await sendWhatsAppMessage(chatId, welcomeMessage);
     await storeMessage(user.id, 'assistant', welcomeMessage);

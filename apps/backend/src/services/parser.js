@@ -4,8 +4,8 @@ import { logger } from '../utils/logger.js';
 
 // ─── Phase 1: Pronoun Normalization ───────────────────────────────────────────
 
-const PRONOUN_MAP_FIRST = /\b(?:gue|gw|gua|gwa|aku|ak|ane|ana|w)\b/gi;
-const PRONOUN_MAP_SECOND = /\b(?:lu|lo|elu|elo|kamu|kmu|km|u)\b/gi;
+const PRONOUN_MAP_FIRST = /\b(?:gue|gw|gua|gwa|aku|ane|ana)\b/gi;
+const PRONOUN_MAP_SECOND = /\b(?:lu|lo|elu|elo|kamu|km)\b/gi;
 
 /** Normalize informal Indonesian pronouns to standard "saya"/"kamu" for pattern matching. */
 export function normalizePronouns(text) {
@@ -326,18 +326,7 @@ export function detectIntent(text) {
   const normalized = normalizeText(text);
   const trimmed = normalized.trim();
 
-  // 1. Strong patterns first — always win, even for questions
-  const reminderMatch = matchPatterns(trimmed, STRONG_REMINDER_PATTERNS);
-  if (reminderMatch) {
-    return { intent: 'reminder', match: reminderMatch, raw: reminderMatch[0], language, source: 'lexical' };
-  }
-
-  const memoryMatch = matchPatterns(trimmed, STRONG_MEMORY_PATTERNS);
-  if (memoryMatch) {
-    return { intent: 'memory', match: memoryMatch, raw: memoryMatch[0], language, source: 'lexical' };
-  }
-
-  // 2. If it looks like a question, don't try weaker patterns
+  // Question guard — block weaker patterns
   if (isLikelyQuestion(trimmed)) {
     return { intent: 'question', match: null, raw: text, language, source: 'lexical' };
   }
@@ -467,9 +456,6 @@ export function parseReminder(text, language = 'en') {
         const p = period.toLowerCase();
         if ((p === 'sore' || p === 'malam') && hours < 12) hours += 12;
         if (p === 'pagi' && hours === 12) hours = 0;
-      } else if (hours <= 6) {
-        // Ambiguous small numbers, assume PM for common reminder times
-        hours += 12;
       }
       return `at ${hours}:${m || '00'}`;
     });

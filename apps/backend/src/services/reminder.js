@@ -66,7 +66,11 @@ async function createNextRecurrence(reminder) {
       break;
     case 'monthly':
       nextScheduled = new Date(currentScheduled);
+      const originalDay = nextScheduled.getDate();
       nextScheduled.setMonth(nextScheduled.getMonth() + 1);
+      if (nextScheduled.getDate() !== originalDay) {
+        nextScheduled.setDate(0); // last day of previous month (the intended month)
+      }
       break;
     default:
       return;

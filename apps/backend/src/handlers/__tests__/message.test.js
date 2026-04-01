@@ -172,6 +172,29 @@ describe('new user registration', () => {
       );
     });
   });
+
+  describe('positive: welcome message uses detected language (HIGH-4 fix)', () => {
+    it('sends Indonesian welcome when first message is Indonesian', async () => {
+      await handleIncomingMessage({
+        from: '628999@c.us',
+        text: 'halo saya ingin menggunakan asisten ini untuk mengingat informasi penting',
+      });
+
+      expect(mockSendMessage).toHaveBeenCalledWith(
+        '628999@c.us',
+        expect.stringContaining('Halo')
+      );
+    });
+
+    it('sends English welcome when first message is English', async () => {
+      await handleIncomingMessage({ from: '628999@c.us', text: 'hello there how are you' });
+
+      expect(mockSendMessage).toHaveBeenCalledWith(
+        '628999@c.us',
+        expect.stringContaining("I'm Nemoris")
+      );
+    });
+  });
 });
 
 // ─── Intent Routing ─────────────────────────────────────────────────────────────
