@@ -438,17 +438,17 @@ export function parseReminder(text, language = 'en') {
     // "jam X" / "pukul X" → "at X:00" (resolve explicit clock times FIRST)
     // Context: check if text has a period hint nearby (pagi/siang/sore/malam)
     const hasPeriodHint = /(?:pagi|siang|sore|malam|subuh)/i.test(processedText);
-    processedText = processedText.replace(/(?:jam|pukul)\s+(\d{1,2})(?:[.:\s](\d{2}))?\s*(pagi|siang|sore|malam)?/gi, (_, h, m, period) => {
+    processedText = processedText.replace(/(?:jam|pukul)\s+(\d{1,2})(?:[.:](\d{2}))?\s*(pagi|siang|sore|malam)?/gi, (_, h, m, period) => {
       let hours = parseInt(h);
+      const mins = m ? parseInt(m) : 0;
       if (period) {
         const p = period.toLowerCase();
         if ((p === 'sore' || p === 'malam') && hours < 12) hours += 12;
         if (p === 'pagi' && hours === 12) hours = 0;
       } else if (hasPeriodHint) {
-        // Use nearby period hint: "besok sore jam 3" → sore context → 15:00
         if (/sore|malam/i.test(processedText) && hours > 0 && hours < 12) hours += 12;
       }
-      return `at ${hours}:${m || '00'}`;
+      return `at ${hours}:${String(mins).padStart(2, '0')} `;
     });
 
     // Compound date+period: "besok pagi" → "tomorrow at 8:00"
