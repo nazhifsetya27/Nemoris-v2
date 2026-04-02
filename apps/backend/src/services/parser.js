@@ -438,7 +438,7 @@ export function parseReminder(text, language = 'en') {
     // "jam X" / "pukul X" → "at X:00" (resolve explicit clock times FIRST)
     // Context: check if text has a period hint nearby (pagi/siang/sore/malam)
     const hasPeriodHint = /(?:pagi|siang|sore|malam|subuh)/i.test(processedText);
-    processedText = processedText.replace(/(?:jam|pukul)\s+(\d{1,2})(?:[.:](\d{2}))?\s*(pagi|siang|sore|malam)?/gi, (_, h, m, period) => {
+    processedText = processedText.replace(/(?:jam|pukul)\s+(\d{1,2})(?:[.:\s](\d{2}))?\s*(pagi|siang|sore|malam)?/gi, (_, h, m, period) => {
       let hours = parseInt(h);
       if (period) {
         const p = period.toLowerCase();
